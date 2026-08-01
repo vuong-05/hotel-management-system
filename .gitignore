@@ -1,0 +1,29 @@
+### Backend - Java / Maven ###
+backend/target/
+backend/.mvn/
+backend/*.iml
+*.class
+*.log
+
+### IDE ###
+.idea/
+.vscode/
+*.iml
+
+### Frontend - Node / React ###
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+### Environment / Secrets — CHẶN CẢ 2 ĐUÔI ###
+.env
+*.env
+application-local.yml
+application-local.yaml
+application-secrets.yml
+application-secrets.yaml
+
+### OS ###
+.DS_Store
+Thumbs.db
