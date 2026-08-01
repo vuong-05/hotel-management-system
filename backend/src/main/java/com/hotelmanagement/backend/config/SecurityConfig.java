@@ -16,6 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 
 import java.util.List;
 
@@ -44,8 +45,10 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
-                .requestMatchers("/api/v1/room-types/**", "/api/v1/rooms/available").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/room-types/**").permitAll()
+                .requestMatchers("/api/v1/room-types/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/rooms/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/users/**").hasAnyRole("CUSTOMER", "ADMIN")
                 .anyRequest().authenticated()
             )
