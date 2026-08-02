@@ -50,6 +50,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/room-types/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/rooms/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/users/**").hasAnyRole("CUSTOMER", "ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/v1/bookings").hasRole("CUSTOMER")
+                .requestMatchers(HttpMethod.GET, "/api/v1/bookings/my-bookings").hasRole("CUSTOMER")
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/bookings/*/cancel").hasRole("CUSTOMER")
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/bookings/*/status").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

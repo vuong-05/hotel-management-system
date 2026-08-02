@@ -14,6 +14,8 @@ import org.springframework.security.authentication.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.hotelmanagement.backend.entity.Customer;
+import com.hotelmanagement.backend.repository.CustomerRepository;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -24,6 +26,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final CustomerRepository customerRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
@@ -55,6 +58,10 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         userRepository.save(user);
+        Customer customer = Customer.builder()
+                .user(user)
+                .build();
+        customerRepository.save(customer);
 
         return buildAuthResponse(user);
     }
