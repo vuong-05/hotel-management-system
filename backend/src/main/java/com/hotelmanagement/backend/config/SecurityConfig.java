@@ -54,6 +54,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/bookings/my-bookings").hasRole("CUSTOMER")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/bookings/*/cancel").hasRole("CUSTOMER")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/bookings/*/status").hasRole("ADMIN")
+                .requestMatchers("/api/v1/payments/**").hasAnyRole("CUSTOMER", "ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
