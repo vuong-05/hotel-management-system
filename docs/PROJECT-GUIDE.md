@@ -1,8 +1,15 @@
-# Hotel Management System — Hướng dẫn tổng hợp (Phase 1 → 5)
+# Hotel Management System — Hướng dẫn tổng hợp (Phase 1 → 9)
 
-> File này tổng hợp lại toàn bộ những gì đã làm từ Phase 1 đến Phase 5, đã gộp
-> sẵn các lỗi thực tế gặp phải và cách fix, để làm lại (hoặc đối chiếu) một lần
-> là đúng, không phải sửa qua sửa lại nhiều lần.
+> File này tổng hợp lại toàn bộ những gì đã làm từ Phase 1 đến Phase 9 (khép
+> kín Release 1 - MVP), đã gộp sẵn các lỗi thực tế gặp phải và cách fix, để
+> làm lại (hoặc đối chiếu) một lần là đúng, không phải sửa qua sửa lại nhiều
+> lần.
+>
+> **Tài khoản test đang dùng trong dự án** (ghi lại để không nhầm lẫn):
+> - `test2@example.com` / `123456` — role **CUSTOMER**, dùng để test đặt
+>   phòng, thanh toán.
+> - `admin@example.com` / `admin123` — role **ADMIN**, dùng để test CRUD
+>   quản trị (room-types, rooms, đổi trạng thái booking).
 
 ---
 
@@ -306,13 +313,23 @@ cài đúng bản này trước khi tạo project.
 ### Bước 2 — Tạo project qua Spring Initializr
 
 Vào https://start.spring.io với cấu hình:
-- Project: **Maven**, Language: **Java**, Spring Boot: **3.3.x**
+- Project: **Maven**, Language: **Java**, Spring Boot: **bản mới nhất do
+  Initializr đề xuất** (thực tế dự án đang chạy trên **Spring Boot 4.0.7**,
+  không phải 3.3.x như dự kiến ban đầu — xem ghi chú version bên dưới)
 - Java: **21**
 - Group: `com.hotelmanagement`, Artifact: `backend`, Packaging: **Jar**
 - Dependencies: Spring Web, Spring Data JPA, Spring Security, Validation,
   MySQL Driver, Lombok, Spring Boot DevTools
 
 Giải nén đè vào thư mục `backend/` đã có sẵn trong repo.
+
+⚠️ **Ghi chú version quan trọng**: Tech Stack ban đầu ghi "Spring Boot 3",
+nhưng Spring Initializr tại thời điểm tạo project đã lên **Spring Boot 4.0.7**
+(nền Spring Framework 7). Quyết định: **giữ nguyên Spring Boot 4.x**, không cố
+ép ngược về 3.x — vì tên nhiều dependency (`spring-boot-starter-webmvc`,
+`spring-boot-starter-*-test`...) đã đổi giữa 2 version, hạ cấp gây vỡ hàng loạt.
+Thay vào đó, đảm bảo mọi dependency đi kèm đều chọn đúng bản tương thích
+Spring Boot 4 (xem bảng lỗi ở cuối file, mục `springdoc-openapi`).
 
 ### Bước 3 — Bổ sung dependencies vào `pom.xml`
 
@@ -489,6 +506,194 @@ git push origin --delete feature/backend-init
 
 ---
 
+## PHASE 6 — Authentication (JWT)
+
+### Chuẩn bị Database
+
+Trước khi code Java, tạo thêm bảng `refresh_tokens` (migration mới, không sửa
+`schema-r1.sql` cũ):
+
+```sql
+USE hotel_management;
+
+CREATE TABLE refresh_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(500) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+```
+
+Lưu vào `database/schema-r1.1-refresh-tokens.sql`.
+
+⚠️ **Quy tắc bắt buộc rút ra từ lỗi thực tế**: mỗi khi thêm Entity mới ánh xạ
+tới bảng mới, **luôn chạy migration SQL trên MySQL TRƯỚC**, rồi mới chạy lại
+Spring Boot. Vì cấu hình `ddl-auto: validate` chỉ kiểm tra chứ không tự tạo
+bảng — quên bước này sẽ gây lỗi `Schema validation: missing table [...]`.
+
+### Nội dung code chính
+
+- **Entity**: `User`, `Role`, `RefreshToken`
+- **Repository**: `UserRepository`, `RoleRepository`, `RefreshTokenRepository`
+- **Security**: `JwtUtil` (generate/validate token bằng `jjwt`),
+  `CustomUserDetailsService` (kết nối Spring Security với bảng `users`),
+  `JwtAuthenticationFilter` (chặn mọi request kiểm tra Bearer token)
+- **Config**: `SecurityConfig` (khai `SecurityFilterChain`, CORS, BCrypt),
+  `OpenApiConfig` (bắt buộc phải có để Swagger hiện nút **Authorize** — xem
+  lỗi bên dưới)
+- **DTO**: `RegisterRequest`, `LoginRequest`, `RefreshTokenRequest`,
+  `AuthResponse`, `UserResponse`, `ApiResponse<T>` (envelope response dùng
+  chung toàn hệ thống: `success/message/data/timestamp`)
+- **Exception**: `BusinessException` (kèm `HttpStatus`), `GlobalExceptionHandler`
+- **Service**: `AuthServiceImpl` — có `register/login/refreshToken/logout`,
+  dùng **Refresh Token Rotation** (mỗi lần refresh sẽ revoke token cũ, phát
+  hành token mới) để tăng bảo mật
+- **Controller**: `AuthController` — 4 endpoint `/auth/register`, `/login`,
+  `/refresh-token`, `/logout`
+
+### Test qua Swagger (theo đúng thứ tự)
+
+1. `POST /auth/register` → nhận `accessToken` + `refreshToken`
+2. `POST /auth/login` → nhận token mới
+3. `POST /auth/refresh-token` (dùng `refreshToken` ở bước 2) → nhận cặp token mới
+4. `POST /auth/logout` (dùng `refreshToken` mới nhất)
+5. Gọi lại `refresh-token` với token vừa logout → **phải báo lỗi 401** (xác
+   nhận cơ chế thu hồi hoạt động đúng)
+
+### Checklist hoàn thành Phase 6
+- [ ] Bảng `refresh_tokens` đã tạo trên MySQL trước khi chạy server
+- [ ] Đăng ký/đăng nhập/refresh/logout đều hoạt động đúng qua Swagger
+- [ ] Token đã logout không dùng lại được (401)
+- [ ] `./mvnw test` pass
+
+---
+
+## PHASE 7 — Room Management (Room Type & Room CRUD)
+
+### Nội dung code chính
+
+- **Entity**: `RoomType` (quan hệ `@OneToMany` với `RoomImage`), `Room`
+  (`@ManyToOne` với `RoomType`), `RoomImage`
+- **Repository**: `RoomTypeRepository extends JpaSpecificationExecutor` (lọc
+  động theo giá/sức chứa/từ khoá không cần viết nhiều method), `RoomRepository`
+- **DTO + Mapper (MapStruct)**: `RoomTypeRequest/Response`, `RoomRequest/Response`,
+  `PageResponse<T>` (envelope phân trang dùng chung)
+- **Service**: `RoomTypeServiceImpl` (search bằng `Specification`, soft
+  delete), `RoomServiceImpl`
+- **Controller**: `RoomTypeController`, `RoomController`
+- **SecurityConfig**: GET `/room-types/**` public, còn lại (POST/PUT/DELETE
+  room-types, toàn bộ `/rooms/**`) chỉ ADMIN
+
+⚠️ **Lưu ý khi viết `RoomRepository.findAvailableRooms`**: query này tham
+chiếu Entity `BookingDetail`/`Booking` (chưa tồn tại ở Phase 7, sẽ tạo ở Phase
+8) → phải **comment lại toàn bộ method** bằng `//`, nếu không server sẽ lỗi
+`Could not resolve root entity 'BookingDetail'` ngay lúc khởi động (Hibernate
+validate JPQL tại thời điểm build bean, không phải lúc gọi API). Bật lại đúng
+method này ở đầu Phase 8 khi đã có đủ Entity.
+
+### Checklist hoàn thành Phase 7
+- [ ] CRUD `room-types` hoạt động đủ (Create/Read/Update/Delete mềm)
+- [ ] CRUD `rooms` hoạt động đủ
+- [ ] Phân trang, lọc, sắp xếp test qua Swagger không lỗi
+- [ ] `./mvnw test` pass
+
+---
+
+## PHASE 8 — Booking (atomic transaction)
+
+### Nội dung code chính
+
+- **Entity còn thiếu**: `Customer`, `Booking`, `BookingDetail`
+- **Bổ sung `AuthServiceImpl.register()`**: tự động tạo `Customer` gắn với
+  `User` mới — vì tài khoản tạo ở Phase 6 (trước khi có đoạn code này) sẽ
+  thiếu `Customer`, cần insert tay 1 lần:
+  ```sql
+  INSERT INTO customers (user_id) SELECT id FROM users WHERE email = '...';
+  ```
+- **`RoomRepository`**: bật lại `findAvailableRooms` đã comment ở Phase 7,
+  thêm `findByIdsForUpdate` dùng **Pessimistic Lock**
+  (`@Lock(LockModeType.PESSIMISTIC_WRITE)`) để chống race condition khi 2
+  người đặt trùng phòng cùng lúc
+- **`BookingServiceImpl.create()`** — logic quan trọng nhất dự án:
+  1. Khoá các phòng được chọn (Pessimistic Lock)
+  2. Kiểm tra lại phòng trống **ngay trong transaction** (không tin kết quả
+     đã xem trước đó — giữa lúc khách xem và lúc đặt có thể người khác đã
+     đặt mất)
+  3. Snapshot giá phòng vào `BookingDetail.unitPrice`
+  4. Tính `totalAmount`, lưu `Booking` + `BookingDetail` cùng 1 transaction
+     (`@Transactional`) — atomic, rollback toàn bộ nếu có lỗi ở bất kỳ bước nào
+- **Đồng bộ `publicId` (UUID) thay vì lộ khoá chính nội bộ qua URL** — đúng
+  nguyên tắc bảo mật đặt ra từ Phase 2. Controller nhận `@PathVariable String
+  id` (là `publicId`), Service tra theo `findByPublicId`, không dùng `Long id`
+  trực tiếp.
+
+### Test qua Swagger (theo đúng thứ tự)
+
+1. Tạo booking (`POST /bookings`) với 1 khoảng ngày cụ thể → `201`
+2. Tạo lại booking **trùng phòng, trùng/chồng lấn ngày** → phải báo `409`
+   (xác nhận chống race condition)
+3. Tạo booking **khác ngày, không chồng lấn** → vẫn `201` bình thường
+4. Huỷ booking (`PATCH /bookings/{publicId}/cancel`) → `200`, status
+   chuyển `CANCELLED`
+5. Đổi trạng thái bằng ADMIN (`PATCH /bookings/{publicId}/status`) → `200`
+
+### Checklist hoàn thành Phase 8
+- [ ] Đặt phòng thành công, tính đúng `totalAmount`
+- [ ] Đặt trùng phòng/trùng ngày bị chặn (409)
+- [ ] Huỷ booking, đổi trạng thái hoạt động đúng
+- [ ] URL dùng `publicId` (UUID), không lộ khoá chính nội bộ
+- [ ] `./mvnw test` pass
+
+---
+
+## PHASE 9 — Payment & Invoice cơ bản
+
+### Nội dung code chính
+
+- **Entity**: `Payment`
+- **Strategy Pattern cho cổng thanh toán** (đúng cam kết từ Phase 1):
+  - `PaymentGateway` (interface) — `process()`, `getMethodName()`
+  - `MockPaymentGateway implements PaymentGateway` — giả lập luôn thành công
+  - Sau này thêm VNPay/MoMo chỉ cần tạo thêm class `implements PaymentGateway`
+    mới, không sửa `PaymentService` (Open/Closed Principle)
+- **`PaymentServiceImpl.pay()`**:
+  - Chặn thanh toán nếu booking đã `CANCELLED`
+  - Chặn thanh toán trùng nếu đã có `Payment` với `status = SUCCESS`
+  - Gọi đúng `PaymentGateway` theo `method` (tra qua `Map<String, PaymentGateway>`
+    build từ danh sách bean `List<PaymentGateway>` — Spring tự inject tất cả
+    implementation)
+  - Thanh toán `SUCCESS` → tự động chuyển `booking.status` sang `CONFIRMED`
+    trong cùng transaction
+
+### Test qua Swagger (theo đúng thứ tự)
+
+1. `POST /payments` với `bookingId` (publicId) đang `PENDING` → `201`,
+   `status: SUCCESS`
+2. `GET /bookings/{id}` → xác nhận status đã tự chuyển `CONFIRMED`
+3. `POST /payments` lại với **cùng `bookingId`** → phải báo `409` (chặn thanh
+   toán trùng)
+
+### 🎉 Release 1 (MVP) hoàn thành
+
+Đánh dấu bằng Git tag:
+```bash
+git tag -a v1.0.0-mvp -m "Release 1: Core MVP - Auth, Room, Booking, Mock Payment"
+git push origin v1.0.0-mvp
+```
+
+### Checklist hoàn thành Phase 9
+- [ ] Thanh toán thành công, booking tự chuyển `CONFIRMED`
+- [ ] Thanh toán trùng bị chặn (409)
+- [ ] Thanh toán booking đã huỷ bị chặn
+- [ ] `./mvnw test` pass
+- [ ] Git tag `v1.0.0-mvp` đã tạo
+
+---
+
 ## Bảng tổng hợp lỗi thường gặp & cách fix (tra cứu nhanh)
 
 | Lỗi | Nguyên nhân | Cách fix |
@@ -498,11 +703,25 @@ git push origin --delete feature/backend-init
 | `Public Key Retrieval is not allowed` | MySQL 8 dùng `caching_sha2_password`, thiếu tham số JDBC | Thêm `&allowPublicKeyRetrieval=true` vào JDBC URL (chỉ dùng local) |
 | File `application-local.yaml` bị lộ lên GitHub | Gõ nhầm `.yaml` thay vì `.yml`, `.gitignore` chỉ khai 1 đuôi | Đổi tên đúng `.yml`, sửa `.gitignore` chặn cả 2 đuôi, đổi secret đã lộ |
 | Thư mục tạo xong nhưng không thấy trên GitHub | Git không track thư mục rỗng | Thêm file `.gitkeep` hoặc file thật vào thư mục |
+| `NoSuchMethodError: ControllerAdviceBean.<init>`, Swagger `/api-docs` trả 500 | `springdoc-openapi` bản 2.x không tương thích Spring Boot 4.x | Dùng `springdoc-openapi-starter-webmvc-ui` bản **3.0.3+**, giữ nguyên Spring Boot 4.x (không hạ về 3.x vì tên nhiều starter đã đổi) |
+| Maven báo `'dependencies.dependency.version' ... is missing` khi hạ `<parent>` version | pom.xml dùng tên dependency kiểu Spring Boot 4 (`spring-boot-starter-webmvc`, `-test` suffix mới) nhưng khai `<parent>` version 3.x | Không hạ cấp `<parent>`; giữ đúng version Spring Boot mà Initializr đã sinh ra ban đầu |
+| Khởi động lỗi `Schema validation: missing table [xxx]` | Entity mới ánh xạ bảng chưa có trên MySQL (do `ddl-auto: validate` không tự tạo bảng) | Chạy file migration SQL tạo bảng đó **trước**, rồi mới chạy lại server |
+| `Could not resolve root entity 'BookingDetail'` (hoặc Entity khác) khi start server | Repository có `@Query` JPQL tham chiếu Entity chưa được tạo | Comment lại toàn bộ method `@Query` đó cho tới khi Entity liên quan tồn tại |
+| Swagger không có nút "Authorize" | Chưa cấu hình `SecurityScheme` cho OpenAPI | Tạo `config/OpenApiConfig.java` khai `SecurityScheme` kiểu `bearer`/`JWT` |
+| `Sort expression '[...]: ASC' must only contain property references...` (500) khi gọi API có phân trang | Swagger UI tự động điền `sort=string` (hoặc `sort=[]`) vào tham số phân trang, ghi đè giá trị mặc định | Trong Controller, không nhận `Pageable` trần — dùng `@RequestParam int page/size` rồi tự dựng `PageRequest.of(page, size, Sort.by(...))`, bỏ qua hoàn toàn `sort` do client gửi |
+| `Cannot lazily initialize collection/proxy ... (no session)` khi gọi API trả về Entity có quan hệ | Quan hệ `@ManyToOne`/`@OneToMany` mặc định `FetchType.LAZY`, session Hibernate đã đóng trước khi Mapper đọc dữ liệu quan hệ | Thêm `@Transactional(readOnly = true)` vào **mọi** method Service trả về dữ liệu có quan hệ LAZY |
+| `403 Forbidden` khi gọi API dù đã đăng nhập | Token đang dùng thuộc tài khoản sai role (VD: dùng tài khoản ADMIN gọi API chỉ dành cho CUSTOMER hoặc ngược lại) | Dùng đúng tài khoản test theo role — xem bảng tài khoản test ở đầu file; đăng nhập lại lấy token đúng role trước khi Authorize lại trên Swagger |
+| `409 Conflict` khi tạo mới (email/số phòng/...) dù nghĩ là dữ liệu mới | Dữ liệu đó đã được tạo ở lần test trước đó (không phải bug) | Kiểm tra lại bằng `SELECT` trong MySQL trước khi đoán mò giá trị mới |
 
 ---
 
-## Tiếp theo: Phase 6 — Authentication (JWT)
+## Tiếp theo: Phase 10 trở đi
 
-Sẽ triển khai: Entity `User`, `Role`; Spring Security config; JWT
-generate/validate; API `/auth/register`, `/auth/login`,
-`/auth/refresh-token`, `/auth/logout`.
+Release 1 (MVP) đã hoàn thành (Phase 1-9): Auth, Room, Booking, Payment.
+Hai hướng có thể đi tiếp:
+
+1. **Release 2 (Backend)**: Receptionist/Manager role, Service (Spa,
+   Breakfast...), Voucher — mở rộng theo đúng roadmap đã đặt ra ở
+   `docs/REQUIREMENTS.md`.
+2. **Frontend (React)**: khởi động `frontend/` để có giao diện demo trực
+   quan cho toàn bộ luồng Backend đã xây dựng xong.
