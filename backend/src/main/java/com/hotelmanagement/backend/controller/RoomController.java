@@ -8,8 +8,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/v1/rooms")
@@ -18,9 +20,13 @@ public class RoomController {
 
     private final RoomService roomService;
 
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<RoomResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.success("Success", roomService.getAll()));
+    @GetMapping("/available")
+    public ResponseEntity<ApiResponse<List<RoomResponse>>> getAvailableRooms(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkIn,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOut,
+            @RequestParam(required = false) Long roomTypeId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Success", roomService.getAvailableRooms(checkIn, checkOut, roomTypeId)));
     }
 
     @PostMapping

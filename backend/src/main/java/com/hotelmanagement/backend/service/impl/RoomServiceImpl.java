@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -27,8 +28,8 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<RoomResponse> getAll() {
-        return roomRepository.findAll().stream()
+    public List<RoomResponse> getAvailableRooms(LocalDate checkIn, LocalDate checkOut, Long roomTypeId) {
+        return roomRepository.findAvailableRooms(checkIn, checkOut, roomTypeId).stream()
                 .map(roomMapper::toResponse)
                 .collect(Collectors.toList());
     }
