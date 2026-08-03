@@ -1,8 +1,17 @@
 import { Routes, Route } from 'react-router-dom';
 import LoginPage from '../features/auth/components/LoginPage';
 import RegisterPage from '../features/auth/components/RegisterPage';
+import RoomTypeList from '../features/rooms/components/RoomTypeList';
 
-const HomePage = () => <div className="p-8 text-2xl font-bold">Trang chủ Hotel Management</div>;
+const HomePage = () => (
+  <div>
+    <div className="p-8 pb-0">
+      <h1 className="text-3xl font-bold">Hotel Management System</h1>
+      <p className="text-gray-500 mt-2">Khám phá các loại phòng của chúng tôi</p>
+    </div>
+    <RoomTypeList />
+  </div>
+);
 
 export default function AppRoutes() {
   return (
