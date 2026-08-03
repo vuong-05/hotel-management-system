@@ -58,6 +58,7 @@ public class RoomTypeServiceImpl implements RoomTypeService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public RoomTypeResponse getById(Long id) {
         RoomType roomType = findActiveById(id);
         return roomTypeMapper.toResponse(roomType);

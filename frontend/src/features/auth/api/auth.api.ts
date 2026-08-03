@@ -16,3 +16,8 @@ export const logoutApi = async (refreshToken: string) => {
   const res = await apiClient.post<ApiResponse<null>>('/auth/logout', { refreshToken });
   return res.data;
 };
+
+export const refreshTokenApi = async (refreshToken: string) => {
+  const res = await apiClient.post<ApiResponse<AuthResponseData>>('/auth/refresh-token', { refreshToken });
+  return res.data.data;
+};

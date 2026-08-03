@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { getRoomTypesApi } from '../api/room.api';
 
 export default function RoomTypeList() {
@@ -24,7 +25,11 @@ export default function RoomTypeList() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-8">
       {rooms.map((room) => (
-        <div key={room.id} className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
+        <Link
+          to={`/rooms/${room.id}`}
+          key={room.id}
+          className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition block"
+        >
           <div className="h-48 bg-gray-200 flex items-center justify-center text-gray-400">
             {room.images.length > 0 ? (
               <img src={room.images[0]} alt={room.name} className="w-full h-full object-cover" />
@@ -42,7 +47,7 @@ export default function RoomTypeList() {
               <span className="text-sm text-gray-500">Tối đa {room.maxOccupancy} khách</span>
             </div>
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   );
