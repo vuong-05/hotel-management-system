@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
 
@@ -25,10 +27,12 @@ public class RoomTypeController {
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Integer occupancy,
-            Pageable pageable) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
         PageResponse<RoomTypeResponse> result = roomTypeService.search(keyword, minPrice, maxPrice, occupancy, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Success", result));
+        return ResponseEntity.ok(ApiResponse.success("Success", result));       
     }
 
     @GetMapping("/{id}")
