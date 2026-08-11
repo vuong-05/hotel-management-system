@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { getRoomTypesApi } from '../api/room.api';
+import RoomCardSkeleton from '../../../components/ui/RoomCardSkeleton';
 
 export default function RoomTypeList() {
   const { data, isLoading, isError } = useQuery({
@@ -9,7 +10,13 @@ export default function RoomTypeList() {
   });
 
   if (isLoading) {
-    return <div className="text-center py-12">Đang tải danh sách phòng...</div>;
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-8">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <RoomCardSkeleton key={i} />
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
