@@ -22,3 +22,13 @@ export interface BookingResponseData {
   totalAmount: number;
   roomNumbers: string[];
 }
+
+export interface PaymentResponseData {
+  id: number;
+  bookingId: string;
+  method: string;
+  status: string;
+  amount: number;
+  transactionRef: string;
+  paidAt: string;
+}
