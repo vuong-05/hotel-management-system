@@ -24,6 +24,11 @@ export default function Header() {
 
           {isAuthenticated ? (
             <>
+              {user?.role === 'ADMIN' && (
+                <Link to="/admin/room-types" className="text-sm hover:text-blue-600">
+                  Quản lý phòng
+                </Link>
+              )}
               <Link to="/my-bookings" className="text-sm hover:text-blue-600">
                 Booking của tôi
               </Link>

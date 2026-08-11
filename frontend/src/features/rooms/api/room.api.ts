@@ -8,3 +8,20 @@ export const getRoomTypesApi = async (page: number = 0, size: number = 10) => {
   });
   return res.data.data;
 };
+
+export interface RoomTypePayload {
+  name: string;
+  description: string;
+  basePrice: number;
+  maxOccupancy: number;
+}
+
+export const createRoomTypeApi = async (payload: RoomTypePayload) => {
+  const res = await apiClient.post<ApiResponse<RoomType>>('/room-types', payload);
+  return res.data.data;
+};
+
+export const deleteRoomTypeApi = async (id: number) => {
+  const res = await apiClient.delete<ApiResponse<null>>(`/room-types/${id}`);
+  return res.data;
+};
