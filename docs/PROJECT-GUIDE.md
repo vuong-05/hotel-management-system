@@ -1,15 +1,19 @@
-# Hotel Management System — Hướng dẫn tổng hợp (Phase 1 → 9)
+# Hotel Management System — Hướng dẫn tổng hợp (Phase 1 → 15)
 
-> File này tổng hợp lại toàn bộ những gì đã làm từ Phase 1 đến Phase 9 (khép
-> kín Release 1 - MVP), đã gộp sẵn các lỗi thực tế gặp phải và cách fix, để
-> làm lại (hoặc đối chiếu) một lần là đúng, không phải sửa qua sửa lại nhiều
-> lần.
+> File này tổng hợp lại toàn bộ những gì đã làm từ Phase 1 đến Phase 15
+> (khép kín Full-stack MVP + Deploy production), đã gộp sẵn các lỗi thực tế
+> gặp phải và cách fix, để làm lại (hoặc đối chiếu) một lần là đúng, không
+> phải sửa qua sửa lại nhiều lần.
 >
-> **Tài khoản test đang dùng trong dự án** (ghi lại để không nhầm lẫn):
-> - `test2@example.com` / `123456` — role **CUSTOMER**, dùng để test đặt
->   phòng, thanh toán.
-> - `admin@example.com` / `admin123` — role **ADMIN**, dùng để test CRUD
->   quản trị (room-types, rooms, đổi trạng thái booking).
+> **Tài khoản test đang dùng trong dự án:**
+> - Local: `test2@example.com` / `123456` (CUSTOMER), `admin@example.com` /
+>   `admin123` (ADMIN)
+> - Production: `admin@hotelms.com` / `admin123456` (ADMIN), `customer@hotelms.com` /
+>   `123456` (CUSTOMER)
+>
+> **URL Production:**
+> - Frontend: `https://hotel-management-frontend-rosy-omega.vercel.app`
+> - Backend: `https://hotel-management-backend-zs32.onrender.com`
 
 ---
 
@@ -694,6 +698,253 @@ git push origin v1.0.0-mvp
 
 ---
 
+## PHASE 10 — Frontend Init (React + TypeScript + Vite)
+
+### Nội dung chính
+
+- Khởi tạo qua `npm create vite@latest . -- --template react-ts`, chọn
+  **ESLint** (không chọn Oxlint — ESLint phổ biến hơn, quen thuộc với nhà
+  tuyển dụng).
+- ⚠️ **Tailwind CSS v4 đã đổi hoàn toàn cách khởi tạo** so với v3 mà phần
+  lớn tài liệu cũ mô tả:
+  - Không còn lệnh `tailwindcss init -p` (bản v4 **bỏ hẳn** lệnh `init`,
+    chạy sẽ báo `could not determine executable to run`).
+  - Cài đúng: `npm install tailwindcss @tailwindcss/vite` (không cần
+    `postcss`, `autoprefixer` nữa).
+  - Cấu hình qua plugin trong `vite.config.ts`:
+    ```ts
+    import tailwindcss from '@tailwindcss/vite'
+    export default defineConfig({ plugins: [react(), tailwindcss()] })
+    ```
+  - `src/index.css` chỉ cần 1 dòng: `@import "tailwindcss";` (không phải 3
+    dòng `@tailwind base/components/utilities` như v3).
+  - Không bắt buộc phải có `tailwind.config.js`.
+- Cấu trúc thư mục **Feature-based**: `features/{auth,rooms,booking}/{api,components,types}`,
+  cộng với `components/{ui,layout}`, `lib/`, `hooks/`, `routes/`, `types/`.
+- `lib/axios.ts`: 1 Axios instance dùng chung, có interceptor tự gắn
+  `Authorization: Bearer <token>` vào mọi request.
+- PowerShell không hiểu cú pháp `mkdir -p a/b, a/c` kiểu Bash — dùng
+  `mkdir a/b, a/c` (phẩy, không `-p`) hoặc `New-Item -ItemType Directory -Force`.
+
+### Checklist hoàn thành Phase 10
+- [ ] `npm run dev` chạy, Tailwind hoạt động (test bằng 1 class màu)
+- [ ] Cấu trúc thư mục Feature-based đã tạo đủ
+
+---
+
+## PHASE 11 — Frontend Authentication
+
+### Nội dung chính
+
+- `AuthContext.tsx`: Context lưu `user`, `accessToken` (chỉ trong memory —
+  **không** lưu `localStorage` để tránh rủi ro XSS), `refreshToken` + `user`
+  lưu `localStorage` để giữ đăng nhập qua lần F5.
+- ⚠️ **Thiếu sót ban đầu, phải vá lại**: nếu chỉ lưu `accessToken` trong
+  memory mà không tự động khôi phục, **F5 trang sẽ làm mất token**, mọi
+  request sau đó trả về `403` dù `refreshToken` vẫn còn hợp lệ. Fix bằng
+  cách gọi `refresh-token` API ngay trong `useEffect` khi `AuthProvider`
+  khởi tạo, nếu phát hiện có `refreshToken` cũ trong `localStorage`.
+- `RegisterPage.tsx`, `LoginPage.tsx`: form cơ bản, gọi API, `login()` xong
+  điều hướng về `/`.
+
+### Checklist hoàn thành Phase 11
+- [ ] Đăng ký/đăng nhập qua giao diện thật, kết nối đúng Backend
+- [ ] F5 giữa chừng KHÔNG làm mất đăng nhập (tự động refresh token)
+
+---
+
+## PHASE 12 — Trang chủ & Danh sách phòng
+
+### Nội dung chính
+
+- `RoomTypeList.tsx`: dùng TanStack Query (`useQuery`) gọi `GET /room-types`,
+  hiển thị dạng lưới (grid) card.
+- Không cần đăng nhập vẫn xem được (đúng thiết kế API public).
+
+### Checklist hoàn thành Phase 12
+- [ ] Trang chủ hiện đúng danh sách phòng lấy từ Backend thật
+
+---
+
+## PHASE 13 — Chi tiết phòng & Đặt phòng
+
+### Nội dung chính
+
+- ⚠️ **API `GET /rooms/available` thiết kế từ Phase 4 nhưng chưa từng có
+  Controller thật** — phải bổ sung ở Backend trước khi Frontend gọi được:
+  thêm `getAvailableRooms()` vào `RoomService`/`RoomServiceImpl`, thêm route
+  `GET /rooms/available` vào `RoomController`, và mở public trong
+  `SecurityConfig` (`.requestMatchers(HttpMethod.GET, "/api/v1/rooms/available").permitAll()`).
+- `RoomDetailPage.tsx`: form chọn ngày → `useMutation` gọi tìm phòng trống →
+  chọn phòng (radio) → `useMutation` gọi tạo booking. Nếu chưa đăng nhập,
+  bấm "Đặt phòng" sẽ điều hướng sang `/login`.
+- Card phòng ở trang chủ bọc trong `<Link to={/rooms/${id}}>` để bấm vào
+  được.
+
+### Checklist hoàn thành Phase 13
+- [ ] Tìm phòng trống hoạt động đúng qua giao diện
+- [ ] Đặt phòng thành công, nhận được mã booking (UUID)
+
+---
+
+## PHASE 14 — Thanh toán & Lịch sử đặt phòng
+
+### Nội dung chính
+
+- `MyBookingsPage.tsx`: `GET /bookings/my-bookings`, hiển thị trạng thái
+  từng booking (map màu theo status), nút "Thanh toán ngay" chỉ hiện khi
+  `status === 'PENDING'`.
+- `Header.tsx`: menu điều hướng (Trang chủ / Booking của tôi / Đăng
+  nhập-Đăng ký hoặc Xin chào + Đăng xuất tuỳ `isAuthenticated`), gắn vào
+  `App.tsx` để hiện ở mọi trang.
+- Thanh toán xong dùng `queryClient.invalidateQueries` để tự động refetch
+  danh sách booking, cập nhật trạng thái ngay không cần F5.
+
+### Checklist hoàn thành Phase 14
+- [ ] Luồng end-to-end hoàn chỉnh: đăng ký → tìm phòng → đặt → xem lịch sử
+      → thanh toán → trạng thái tự chuyển "Đã xác nhận"
+
+### 🎉 Full-stack MVP hoàn thành (Phase 1-14)
+```bash
+git tag -a v1.0.0-fullstack-mvp -m "Full-stack MVP complete: Auth, Room, Booking, Payment (Backend + Frontend)"
+git push origin v1.0.0-fullstack-mvp
+```
+
+---
+
+## PHASE 15 — Deploy Production
+
+### Lựa chọn nền tảng (miễn phí, đã kiểm chứng thực tế)
+
+| Thành phần | Nền tảng | Ghi chú |
+|---|---|---|
+| Database MySQL | **Aiven** | Free vĩnh viễn, không cần thẻ. Render chỉ free PostgreSQL, **không có MySQL free** |
+| Backend | **Render** | Free web service, tự deploy khi push `main`. Ngủ sau 15 phút không traffic, lần đầu load lại chậm 30-60s |
+| Frontend | **Vercel** | Free, build nhanh (1-3 phút), tối ưu cho SPA |
+
+### Bước 1 — Database (Aiven)
+
+1. Tạo service MySQL trên Aiven (Free plan), đợi status **Running**.
+2. Lấy `Host`, `Port`, `Database name`, `User`, `Password` từ tab Connection
+   information.
+3. Kết nối MySQL Workbench tới Aiven (cần bật SSL: tab SSL → "Use SSL if
+   available").
+4. Chạy `schema-r1.sql` (giữ nguyên `CREATE DATABASE hotel_management`,
+   không cần đổi tên database) và `schema-r1.1-refresh-tokens.sql`.
+
+### Bước 2 — Chuẩn bị code Backend cho deploy
+
+**`application.yml`** — đổi từ giá trị cứng sang đọc biến môi trường:
+```yaml
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: ${DB_URL:}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+server:
+  port: ${PORT:8080}
+jwt:
+  secret: ${JWT_SECRET:...}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION:3600000}
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+```
+`application-local.yml` (giá trị cứng cho local) vẫn giữ nguyên — Spring tự
+ưu tiên nạp đè lên khi `profiles.active=local` (mặc định), nên chạy local
+không bị ảnh hưởng.
+
+**`Dockerfile`** (đặt trong `backend/`, multi-stage build để đảm bảo đúng
+JDK 21 dù Render mặc định bản khác):
+```dockerfile
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+### Bước 3 — Deploy Backend (Render)
+
+1. New Web Service → connect repo GitHub → **Root Directory: `backend`**
+   (bắt buộc, vì Dockerfile nằm trong đó) → Runtime: **Docker** → Free.
+2. Environment Variables cần set đủ 7 biến:
+   `SPRING_PROFILES_ACTIVE=prod`, `DB_URL` (JDBC URL trỏ Aiven, dùng
+   `useSSL=true&requireSSL=true` — khác local dùng `useSSL=false`),
+   `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`,
+   `JWT_REFRESH_EXPIRATION`.
+3. Create Web Service, đợi build (~5-10 phút lần đầu do tải Maven).
+4. Mỗi lần `git push`/merge PR vào `main`, Render **tự động build lại**
+   (không cần thao tác thủ công). Muốn ép build lại tay: nút **Manual
+   Deploy → Deploy latest commit**.
+
+### Bước 4 — Deploy Frontend (Vercel)
+
+1. Add New Project → import repo → **Root Directory: `frontend`** →
+   Framework tự nhận **Vite**.
+2. Environment Variable: `VITE_API_BASE_URL` = URL Backend thật trên
+   Render + `/api/v1` (ví dụ
+   `https://hotel-management-backend-xxxx.onrender.com/api/v1`).
+3. Deploy — nhanh hơn Backend nhiều vì chỉ build static.
+
+### Bước 5 — Tạo dữ liệu mẫu trên production
+
+Database Aiven ban đầu **trống trơn** (chỉ có `roles`/`permissions` từ
+seed data) — khác hẳn database local đã có sẵn dữ liệu test. Phải:
+1. Đăng ký 1 tài khoản qua Frontend production → nâng role lên ADMIN bằng
+   SQL trực tiếp trên Aiven.
+2. Đăng nhập lấy token ADMIN, dùng Swagger production (`<backend-url>/swagger-ui.html`)
+   để tạo `room-types` và `rooms` mẫu — y hệt cách đã làm ở Phase 7 cho
+   local, chỉ khác là gọi vào URL production.
+3. Đăng ký thêm 1 tài khoản CUSTOMER riêng để test luồng đặt phòng (không
+   dùng chung tài khoản ADMIN).
+
+### ⚠️ 4 lỗi lớn nhất khi deploy — đọc kỹ trước khi làm lại
+
+1. **Build Docker fail vì lỗi code cũ chưa lộ ở local** — máy local build
+   kiểu incremental (không xoá cache), có thể "che" mất 1 method bị thiếu
+   trong class implement interface. Docker build luôn sạch từ đầu nên lỗi
+   lộ ra ngay (`class ... is not abstract and does not override abstract
+   method ...`). Luôn `./mvnw clean spring-boot:run` (có `clean`) ở local
+   trước khi push, không chỉ chạy suông.
+2. **`sort=["string"]` lỗi 500 lặp lại y hệt trên production** dù đã fix
+   1 Controller (`RoomTypeController`) — vì mỗi Controller có tham số
+   `Pageable` phải tự áp dụng cách né `sort` riêng (dùng `page`/`size` +
+   tự dựng `PageRequest`, không nhận `Pageable` trần), sửa 1 chỗ không tự
+   động fix chỗ khác.
+3. **CORS chặn Frontend production gọi Backend production** — status
+   `403 Forbidden` khi gọi từ domain Vercel. `SecurityConfig` chỉ khai
+   `http://localhost:5173` trong `allowedOrigins` — phải thêm domain
+   Vercel thật vào danh sách:
+   ```java
+   config.setAllowedOrigins(List.of(
+       "http://localhost:5173",
+       "https://<your-frontend>.vercel.app"
+   ));
+   ```
+4. **Trang chủ production hiện "Chưa có phòng"** — không phải bug, chỉ vì
+   database Aiven là môi trường **hoàn toàn tách biệt** với MySQL local,
+   dữ liệu test ở local không tự động có trên production. Phải tạo lại dữ
+   liệu mẫu qua Swagger production (xem Bước 5).
+
+### Checklist hoàn thành Phase 15
+- [ ] Database Aiven có đủ schema, ở trạng thái Running
+- [ ] Backend Render trạng thái "Live", Swagger production load được
+- [ ] Frontend Vercel trạng thái "Ready", gọi đúng tới Backend Render (kiểm
+      tra qua tab Network, không phải `localhost`)
+- [ ] CORS đã thêm domain Vercel, không còn lỗi 403 khi gọi cross-origin
+- [ ] Có dữ liệu mẫu (room-types, rooms) trên production
+- [ ] Test trọn vẹn luồng end-to-end trên URL production bằng tài khoản
+      CUSTOMER: đăng ký → đặt phòng → xem lịch sử → thanh toán
+
+---
+
 ## Bảng tổng hợp lỗi thường gặp & cách fix (tra cứu nhanh)
 
 | Lỗi | Nguyên nhân | Cách fix |
@@ -712,16 +963,29 @@ git push origin v1.0.0-mvp
 | `Cannot lazily initialize collection/proxy ... (no session)` khi gọi API trả về Entity có quan hệ | Quan hệ `@ManyToOne`/`@OneToMany` mặc định `FetchType.LAZY`, session Hibernate đã đóng trước khi Mapper đọc dữ liệu quan hệ | Thêm `@Transactional(readOnly = true)` vào **mọi** method Service trả về dữ liệu có quan hệ LAZY |
 | `403 Forbidden` khi gọi API dù đã đăng nhập | Token đang dùng thuộc tài khoản sai role (VD: dùng tài khoản ADMIN gọi API chỉ dành cho CUSTOMER hoặc ngược lại) | Dùng đúng tài khoản test theo role — xem bảng tài khoản test ở đầu file; đăng nhập lại lấy token đúng role trước khi Authorize lại trên Swagger |
 | `409 Conflict` khi tạo mới (email/số phòng/...) dù nghĩ là dữ liệu mới | Dữ liệu đó đã được tạo ở lần test trước đó (không phải bug) | Kiểm tra lại bằng `SELECT` trong MySQL trước khi đoán mò giá trị mới |
+| `could not determine executable to run` khi chạy `npx tailwindcss init -p` | Tailwind CSS v4 đã bỏ hẳn lệnh `init` | Cài `tailwindcss @tailwindcss/vite`, cấu hình qua plugin trong `vite.config.ts`, dùng `@import "tailwindcss";` trong CSS thay vì 3 dòng `@tailwind` |
+| `mkdir : A positional parameter cannot be found...` trên Windows | Cú pháp `mkdir -p a/b a/c` là Bash, PowerShell không hiểu | Dùng `mkdir a/b, a/c` (phẩy) hoặc `New-Item -ItemType Directory -Force -Path ...` |
+| Đăng nhập thất bại / trang chủ kẹt mãi "Đang tải..." khi test Frontend | Backend đang không chạy (terminal đã dừng) | Kiểm tra Swagger `<backend-url>/swagger-ui.html` có load được không; nếu không, khởi động lại Backend |
+| Đặt phòng báo lỗi 403 dù vừa đăng nhập xong | `accessToken` chỉ lưu trong memory, bị mất khi F5 trang giữa chừng lúc test | Thêm cơ chế tự động gọi `refresh-token` khi `AuthProvider` khởi tạo (đọc `refreshToken` từ `localStorage`) |
+| Build Docker fail trên Render dù local chạy được (`class ... does not override abstract method ...`) | Máy local build kiểu incremental, "che" mất lỗi thiếu method; Docker build sạch từ đầu nên lộ ra | Luôn `./mvnw clean ...` (có `clean`) ở local trước khi push để bắt lỗi sớm, giống hệt môi trường build sạch của Docker |
+| API `sort=["string"]` vẫn lỗi 500 trên production dù đã fix 1 Controller khác | Mỗi Controller có `Pageable` là 1 chỗ lỗi độc lập, phải tự sửa riêng | Rà soát toàn bộ Controller có tham số `Pageable`, áp dụng cùng cách né `sort` (dùng `page`/`size` + `PageRequest.of(...)`) cho từng cái |
+| `403 Forbidden` khi Frontend production gọi Backend production (nhưng local vẫn OK) | CORS `allowedOrigins` trong `SecurityConfig` chỉ khai `localhost:5173`, chưa có domain Vercel | Thêm domain Frontend production thật vào `config.setAllowedOrigins(List.of(...))` |
+| Trang chủ production hiện "Chưa có phòng nào" dù local có đủ dữ liệu | Database Aiven (production) và MySQL local là 2 database hoàn toàn tách biệt | Tạo lại dữ liệu mẫu qua Swagger production (đăng ký ADMIN, tạo room-types/rooms) — không tự đồng bộ từ local |
 
 ---
 
-## Tiếp theo: Phase 10 trở đi
+## Tiếp theo: Phase 16 trở đi
 
-Release 1 (MVP) đã hoàn thành (Phase 1-9): Auth, Room, Booking, Payment.
-Hai hướng có thể đi tiếp:
+Full-stack MVP (Phase 1-14) đã hoàn thành và **đã deploy production**
+(Phase 15) — có link demo sống, database thật, CI/CD tự động khi push
+`main`. Ba hướng có thể đi tiếp, theo đúng thứ tự ưu tiên đã thống nhất:
 
-1. **Release 2 (Backend)**: Receptionist/Manager role, Service (Spa,
-   Breakfast...), Voucher — mở rộng theo đúng roadmap đã đặt ra ở
-   `docs/REQUIREMENTS.md`.
-2. **Frontend (React)**: khởi động `frontend/` để có giao diện demo trực
-   quan cho toàn bộ luồng Backend đã xây dựng xong.
+1. **README chuyên nghiệp** — đã hoàn thành, có link demo, badge, kiến
+   trúc, hướng dẫn chạy local.
+2. **Polish giao diện (UI/UX)** — nâng cấp trang chủ có banner, ảnh phòng
+   thật (tích hợp Cloudinary), responsive tốt hơn, loading skeleton thay
+   vì chữ "Đang tải...", trang Admin quản trị phòng/booking ngay trên
+   Frontend (hiện vẫn phải dùng Swagger để tạo dữ liệu).
+3. **Release 2 (Backend)**: Receptionist/Manager role, Service (Spa,
+   Breakfast...), Voucher, Dashboard thống kê — mở rộng theo đúng roadmap
+   đã đặt ra ở `docs/REQUIREMENTS.md`.
